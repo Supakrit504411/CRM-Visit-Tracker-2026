@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CRM System</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; padding-bottom: 50px; }
+        
+        /* Login Styles */
+        #loginScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            z-index: 9999; display: flex; justify-content: center; align-items: center;
+        }
+        .login-box {
+            background: white; padding: 2.5rem; border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 85%; max-width: 380px; text-align: center;
+        }
+
+        /* App Styles */
+        .hidden { display: none !important; }
+        .card { border: none; shadow-sm: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border-radius: 12px; }
+        .nav-pills .nav-link.active { background-color: #0d6efd; font-weight: 600; box-shadow: 0 2px 4px rgba(13,110,253,0.3); }
+        .img-thumbnail-icon { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; cursor: pointer; border: 1px solid #dee2e6; margin: 2px; }
+        
+        /* Loading Overlay */
+        #loadingOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); z-index: 10000;
+            display: flex; justify-content: center; align-items: center; flex-direction: column; color: white;
+        }
+        
+        /* Footer Credit */
+        .footer-credit {
+            text-align: center; font-size: 0.75rem; color: #adb5bd; margin-top: 30px;
+        }
+        .footer-credit strong { color: #6c757d; }
+
+        /* Header with Logout */
+        .app-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body class="p-2 p-md-4">
+
+    <div id="loadingOverlay" class="hidden">
+        <div class="spinner-border text-light mb-2" role="status"></div>
+        <div id="loadingText">กำลังประมวลผล...</div>
+    </div>
+
+    <div id="loginScreen">
+        <div class="login-box">
+            <h2 class="mb-4 text-primary fw-bold"><i class="bi bi-shield-check"></i> CRM Login</h2>
+            <input type="password" id="passwordInput" class="form-control form-control-lg mb-3 text-center" placeholder="รหัสผ่าน">
+            <button class="btn btn-primary w-100 py-2 fs-5" id="loginBtn" onclick="login()">เข้าสู่ระบบ</button>
+            <p id="loginError" class="text-danger mt-3 small hidden">รหัสผ่านไม่ถูกต้อง</p>
+        </div>
+    </div>
+
+    <div id="mainContent" class="hidden container-md" style="max-width: 800px;">
+        
+        <div class="app-header">
+            <h4 class="fw-bold m-0 text-primary"><i class="bi bi-grid-fill"></i> CRM System</h4>
+            <button class="btn btn-sm btn-outline-danger" onclick="logout()"><i class="bi bi-box-arrow-right"></i> ออกจากระบบ</button>
+        </div>
+
+        <ul class="nav nav-pills nav-fill mb-3" id="pills-tab">
+            <li class="nav-item"><button class="nav-link active" id="tab-form" onclick="switchTab('form')">📝 บันทึก</button></li>
+            <li class="nav-item"><button class="nav-link" id="tab-dash" onclick="switchTab('dash')">📊 แดชบอร์ด</button></li>
+        </ul>
+
+        <div id="view-form">
+            <div class="card p-3">
+                <form id="visitForm" onsubmit="handleSave(event)">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">เลือกลูกค้า</label>
+                        <select class="form-select" id="clientName" onchange="checkNewClient(this)" required>
+                            <option value="" selected disabled>กำลังโหลด...</option>
+                        </select>
+                        <input type="text" class="form-control mt-2 hidden" id="newClientName" placeholder="ชื่อลูกค้าใหม่...">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3"><label class="form-label fw-bold">วันที่</label><input type="date" class="form-control" id="visitDate" required></div>
+                        <div class="col-6 mb-3"><label class="form-label fw-bold">เวลา</label><input type="time" class="form-control" id="visitTime" required></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">สถานะ</label>
+                        <select class="form-select" id="stage" required>
+                            <option value="วางแผน">🔵 วางแผน</option>
+                            <option value="นัดหมาย">🟡 นัดหมาย</option>
+                            <option value="เข้าพบแล้ว">🟢 เข้าพบแล้ว</option>
+                            <option value="ติดตามผล">🔴 ติดตามผล</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">บันทึกเพิ่มเติม</label>
+                        <textarea class="form-control" id="notes" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">📷 แนบรูปภาพ (หลายรูป)</label>
+                        <input type="file" class="form-control" id="uploadFiles" multiple accept="image/*">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">บันทึกข้อมูล</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="view-dash" class="hidden">
+            
+            <div class="card p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-end mb-1">
+                    <h6 class="fw-bold text-muted m-0">🎯 ความครอบคลุม (ลูกค้าที่ไม่ซ้ำ)</h6>
+                    <span id="progressText" class="badge bg-success">0%</span>
+                </div>
+                <div class="progress" style="height: 15px;"><div id="visitProgress" class="progress-bar bg-success" style="width: 0%"></div></div>
+                <div class="d-flex justify-content-between small text-muted mt-1">
+                    <span id="visitedCount">เข้าพบแล้ว: 0</span><span id="targetCount">เป้าหมาย: 0</span>
+                </div>
+            </div>
+
+            <div class="card p-3 mb-3">
+                <h6 class="fw-bold text-muted mb-3 text-center">📊 สัดส่วนสถานะ (คิดเป็น %)</h6>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold m-0">รายการ <span id="totalBadge" class="badge bg-secondary">0</span></h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboard()">🔄</button>
+                </div>
+                <div class="mb-3">
+                    <select class="form-select form-select-sm" id="filterStage" onchange="renderTable()">
+                        <option value="All" id="opt-all">ทั้งหมด (0)</option>
+                        <option value="วางแผน" id="opt-plan">🔵 วางแผน (0)</option>
+                        <option value="นัดหมาย" id="opt-appt">🟡 นัดหมาย (0)</option>
+                        <option value="เข้าพบแล้ว" id="opt-visit">🟢 เข้าพบแล้ว (0)</option>
+                        <option value="ติดตามผล" id="opt-follow">🔴 ติดตามผล (0)</option>
+                    </select>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light"><tr><th>#</th><th>แก้ไข</th><th>ข้อมูล</th><th>สถานะ</th></tr></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="footer-credit">
+                Designed & Developed by <strong>Supakrit Thawang</strong><br>
+                Asst. Manager, Business Services, PEA Nakhon Phanom
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">แก้ไขข้อมูล</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="editRowId"> <input type="hidden" id="editClientName">
+                    <h6 id="displayClientName" class="fw-bold text-primary mb-3"></h6>
+                    <div class="row">
+                        <div class="col-6 mb-3"><label>วันที่</label><input type="date" class="form-control" id="editDate"></div>
+                        <div class="col-6 mb-3"><label>เวลา</label><input type="time" class="form-control" id="editTime"></div>
+                    </div>
+                    <div class="mb-3"><label>สถานะ</label><select class="form-select" id="editStage"><option value="วางแผน">🔵 วางแผน</option><option value="นัดหมาย">🟡 นัดหมาย</option><option value="เข้าพบแล้ว">🟢 เข้าพบแล้ว</option><option value="ติดตามผล">🔴 ติดตามผล</option></select></div>
+                    <div class="mb-3 bg-light p-2 rounded"><label>📷 เพิ่มรูปภาพ</label><input type="file" class="form-control" id="editFiles" multiple></div>
+                    <button class="btn btn-primary w-100" onclick="submitEdit()">บันทึกการแก้ไข</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal fade" id="imageModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content bg-transparent border-0 text-center"><img id="previewImage" class="img-fluid rounded shadow" style="max-height: 90vh;"></div></div></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script>
+        // ************************************************
+        // 1. ใส่ URL ของ Web App ที่ได้จาก Google Script ตรงนี้
+        const API_URL = "https://script.google.com/macros/s/AKfycbx0iejZUxCluJxRVF5cYaUzn6gU-_DYl4pX-MLwRgQZPOwhVRvpjKUBGUUyGWuzpemP/exec"; 
+        // ************************************************
+
+        let rawData = [];
+        let totalClients = 0;
+        let statusChartInstance = null; 
+        const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+        const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+
+        window.onload = () => {
+            if (localStorage.getItem("isLoggedIn")) {
+                document.getElementById("loginScreen").classList.add("hidden");
+                document.getElementById("mainContent").classList.remove("hidden");
+                document.getElementById('visitDate').valueAsDate = new Date();
+                loadClients();
+            }
+
+            // *** ส่วนที่เพิ่มเข้ามา: ดักจับการกดปุ่ม Enter ที่ช่องรหัสผ่าน ***
+            document.getElementById("passwordInput").addEventListener("keypress", function(event) {
+                if (event.key === "Enter") {
+                    event.preventDefault(); // ป้องกันการทำงานปกติ (ถ้ามี)
+                    login(); // สั่งให้กดปุ่ม Login
+                }
+            });
+        };
+
+        async function login() {
+            const pwd = document.getElementById("passwordInput").value;
+            setLoading(true, "กำลังตรวจสอบรหัสผ่าน...");
+            try {
+                const res = await fetch(`${API_URL}?action=login&password=${pwd}`);
+                const data = await res.json();
+                if (data.valid) {
+                    localStorage.setItem("isLoggedIn", "true");
+                    document.getElementById("loginScreen").classList.add("hidden");
+                    document.getElementById("mainContent").classList.remove("hidden");
+                    document.getElementById('visitDate').valueAsDate = new Date();
+                    loadClients();
+                } else {
+                    document.getElementById("loginError").classList.remove("hidden");
+                }
+            } catch (err) { alert("เกิดข้อผิดพลาดในการเชื่อมต่อ"); } finally { setLoading(false); }
+        }
+
+        function logout() {
+            localStorage.removeItem("isLoggedIn");
+            location.reload(); 
+        }
+
+        async function loadClients() {
+            const res = await fetch(`${API_URL}?action=getClients`);
+            const data = await res.json();
+            const select = document.getElementById("clientName");
+            select.innerHTML = '<option value="" selected disabled>-- เลือกลูกค้า --</option>';
+            data.clients.forEach(c => {
+                let icon = c.latestStatus.includes("เข้าพบ") ? "🟢" : c.latestStatus.includes("นัดหมาย") ? "🟡" : "⚪";
+                select.innerHTML += `<option value="${c.name}">${c.name} [${icon} ${c.latestStatus}]</option>`;
+            });
+            select.innerHTML += `<option value="NEW_CLIENT_OPTION" style="color:blue;">➕ เพิ่มลูกค้าใหม่...</option>`;
+        }
+
+        async function loadDashboard() {
+            setLoading(true, "กำลังดึงข้อมูล...");
+            const res = await fetch(`${API_URL}?action=getData`);
+            const data = await res.json();
+            rawData = data.logs;
+            totalClients = data.totalClients;
+            calculateStats();
+            renderTable();
+            setLoading(false);
+        }
+
+        async function handleSave(e) {
+            e.preventDefault();
+            setLoading(true, "กำลังอัปโหลดและบันทึก...");
+            const files = await getFiles("uploadFiles");
+            const payload = {
+                action: "save",
+                clientName: document.getElementById("clientName").value,
+                newClientName: document.getElementById("newClientName").value,
+                visitDate: document.getElementById("visitDate").value,
+                visitTime: document.getElementById("visitTime").value,
+                stage: document.getElementById("stage").value,
+                notes: document.getElementById("notes").value,
+                imageFiles: files
+            };
+            await sendData(payload);
+            e.target.reset(); document.getElementById('visitDate').valueAsDate = new Date();
+            loadClients();
+        }
+
+        async function submitEdit() {
+            setLoading(true, "กำลังบันทึกการแก้ไข...");
+            const files = await getFiles("editFiles");
+            const payload = {
+                action: "update",
+                rowId: document.getElementById("editRowId").value,
+                clientName: document.getElementById("editClientName").value,
+                visitDate: document.getElementById("editDate").value,
+                visitTime: document.getElementById("editTime").value,
+                stage: document.getElementById("editStage").value,
+                imageFiles: files
+            };
+            await sendData(payload);
+            editModal.hide(); loadDashboard();
+        }
+
+        async function sendData(payload) {
+            await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+            setLoading(false); Swal.fire({ icon: 'success', title: 'สำเร็จ', timer: 1500, showConfirmButton: false });
+        }
+
+        function switchTab(tab) {
+            document.getElementById("view-form").classList.add("hidden");
+            document.getElementById("view-dash").classList.add("hidden");
+            document.getElementById("tab-form").classList.remove("active");
+            document.getElementById("tab-dash").classList.remove("active");
+            document.getElementById(`view-${tab}`).classList.remove("hidden");
+            document.getElementById(`tab-${tab}`).classList.add("active");
+            if (tab === 'dash') loadDashboard();
+        }
+
+        function renderTable() {
+            const filter = document.getElementById("filterStage").value;
+            const tbody = document.getElementById("tableBody");
+            tbody.innerHTML = "";
+            let display = filter === "All" ? rawData : rawData.filter(d => d.stage.includes(filter));
+            document.getElementById("totalBadge").innerText = display.length;
+            if(display.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">ไม่พบข้อมูล</td></tr>`; return; }
+            display.forEach((item, idx) => {
+                let badge = item.stage.includes("นัดหมาย") ? "bg-warning text-dark" : item.stage.includes("เข้าพบ") ? "bg-success" : item.stage.includes("ติดตาม") ? "bg-danger" : "bg-primary";
+                let imgs = "";
+                if(item.imageUrl && item.imageUrl.length > 5) {
+                    item.imageUrl.split(",").forEach(url => imgs += `<img src="${url}" class="img-thumbnail-icon" onclick="showImg('${url}')">`);
+                }
+                let tr = `<tr>
+                    <td class="text-center text-muted small">${idx+1}</td>
+                    <td><button class="btn btn-sm btn-outline-primary border-0" onclick="openEdit(${item.rowId}, '${item.client}', '${item.date}', '${item.time}', '${item.stage}')"><i class="bi bi-pencil-square"></i></button></td>
+                    <td><div class="fw-bold small">${item.date}</div><div class="text-muted small">${item.time}</div></td>
+                    <td><div class="small fw-bold">${item.client}</div><span class="badge ${badge} mb-1">${item.stage}</span><div class="d-flex flex-wrap">${imgs}</div></td>
+                </tr>`;
+                tbody.innerHTML += tr;
+            });
+        }
+
+        function calculateStats() {
+            // 1. Coverage
+            let visitedUnique = new Set(rawData.filter(d => d.stage.includes("เข้าพบ")).map(d => d.client)).size;
+            let coveragePercent = totalClients > 0 ? Math.round((visitedUnique/totalClients)*100) : 0;
+            document.getElementById("visitProgress").style.width = coveragePercent + "%";
+            document.getElementById("progressText").innerText = coveragePercent + "%";
+            document.getElementById("visitedCount").innerText = `เข้าพบแล้ว: ${visitedUnique}`;
+            document.getElementById("targetCount").innerText = `เป้าหมาย: ${totalClients} ราย`;
+
+            // 2. Count Status
+            const countPlan = rawData.filter(d => d.stage.includes("วางแผน")).length;
+            const countAppt = rawData.filter(d => d.stage.includes("นัดหมาย")).length;
+            const countVisit = rawData.filter(d => d.stage.includes("เข้าพบ")).length;
+            const countFollow = rawData.filter(d => d.stage.includes("ติดตาม")).length;
+            const countAll = rawData.length;
+
+            // Update Dropdown text
+            document.getElementById("opt-all").innerText = `ทั้งหมด (${countAll})`;
+            document.getElementById("opt-plan").innerText = `🔵 วางแผน (${countPlan})`;
+            document.getElementById("opt-appt").innerText = `🟡 นัดหมาย (${countAppt})`;
+            document.getElementById("opt-visit").innerText = `🟢 เข้าพบแล้ว (${countVisit})`;
+            document.getElementById("opt-follow").innerText = `🔴 ติดตามผล (${countFollow})`;
+
+            // 3. Render Pie Chart with Labels
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            if(statusChartInstance) { statusChartInstance.destroy(); }
+
+            statusChartInstance = new Chart(ctx, {
+                type: 'pie',
+                plugins: [ChartDataLabels], 
+                data: {
+                    labels: ['วางแผน', 'นัดหมาย', 'เข้าพบแล้ว', 'ติดตามผล'],
+                    datasets: [{
+                        data: [countPlan, countAppt, countVisit, countFollow],
+                        backgroundColor: ['#0d6efd', '#ffc107', '#198754', '#dc3545'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        datalabels: {
+                            color: '#fff',
+                            font: { weight: 'bold', size: 12 },
+                            formatter: function(value, context) {
+                                if (value === 0) return ""; 
+                                let total = context.chart._metasets[context.datasetIndex].total;
+                                let percentage = Math.round((value / total) * 100) + '%';
+                                return value + "\n(" + percentage + ")";
+                            },
+                            textAlign: 'center'
+                        }
+                    }
+                }
+            });
+        }
+
+        function checkNewClient(el) { const inp = document.getElementById("newClientName"); el.value === "NEW_CLIENT_OPTION" ? inp.classList.remove("hidden") : inp.classList.add("hidden"); }
+        function openEdit(rowId, client, date, time, stage) {
+            document.getElementById("editRowId").value = rowId; document.getElementById("editClientName").value = client;
+            document.getElementById("displayClientName").innerText = client;
+            document.getElementById("editDate").value = date; document.getElementById("editTime").value = time;
+            document.getElementById("editStage").value = stage; document.getElementById("editFiles").value = "";
+            editModal.show();
+        }
+        function showImg(url) { document.getElementById("previewImage").src = url; imageModal.show(); }
+        function setLoading(isLoading, text="กำลังโหลด...") { const el = document.getElementById("loadingOverlay"); document.getElementById("loadingText").innerText = text; isLoading ? el.classList.remove("hidden") : el.classList.add("hidden"); }
+        function getFiles(id) { return Promise.all([...document.getElementById(id).files].map(f => new Promise(r => { let reader = new FileReader(); reader.onload = e => r({name: f.name, mimeType: f.type, data: e.target.result.split(',')[1]}); reader.readAsDataURL(f); }))); }
+    </script>
+</body>
+</html>
