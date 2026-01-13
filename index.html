@@ -49,6 +49,21 @@
         .app-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
         }
+
+        /* *** New Feature: Scrollable Table *** */
+        .table-scroll-wrapper {
+            max-height: 400px; /* ความสูงประมาณ 5 รายการ */
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        .table-scroll-wrapper thead th {
+            position: sticky; /* ล็อกหัวตาราง */
+            top: 0;
+            background-color: #e9ecef; /* สีพื้นหลังหัวตาราง */
+            z-index: 10;
+            box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body class="p-2 p-md-4">
@@ -83,7 +98,12 @@
             <div class="card p-3">
                 <form id="visitForm" onsubmit="handleSave(event)">
                     <div class="mb-3">
-                        <label class="form-label fw-bold">เลือกลูกค้า</label>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold m-0">เลือกลูกค้า</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadClients(true)">
+                                <i class="bi bi-arrow-clockwise"></i> โหลดข้อมูล
+                            </button>
+                        </div>
                         <select class="form-select" id="clientName" onchange="checkNewClient(this)" required>
                             <option value="" selected disabled>กำลังโหลด...</option>
                         </select>
@@ -149,9 +169,17 @@
                         <option value="ติดตามผล" id="opt-follow">🔴 ติดตามผล (0)</option>
                     </select>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light"><tr><th>#</th><th>แก้ไข</th><th>ข้อมูล</th><th>สถานะ</th></tr></thead>
+                
+                <div class="table-scroll-wrapper">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>แก้ไข</th>
+                                <th>ข้อมูล</th>
+                                <th>สถานะ</th>
+                            </tr>
+                        </thead>
                         <tbody id="tableBody"></tbody>
                     </table>
                 </div>
@@ -208,11 +236,10 @@
                 loadClients();
             }
 
-            // *** ส่วนที่เพิ่มเข้ามา: ดักจับการกดปุ่ม Enter ที่ช่องรหัสผ่าน ***
             document.getElementById("passwordInput").addEventListener("keypress", function(event) {
                 if (event.key === "Enter") {
-                    event.preventDefault(); // ป้องกันการทำงานปกติ (ถ้ามี)
-                    login(); // สั่งให้กดปุ่ม Login
+                    event.preventDefault(); 
+                    login(); 
                 }
             });
         };
@@ -240,16 +267,26 @@
             location.reload(); 
         }
 
-        async function loadClients() {
-            const res = await fetch(`${API_URL}?action=getClients`);
-            const data = await res.json();
-            const select = document.getElementById("clientName");
-            select.innerHTML = '<option value="" selected disabled>-- เลือกลูกค้า --</option>';
-            data.clients.forEach(c => {
-                let icon = c.latestStatus.includes("เข้าพบ") ? "🟢" : c.latestStatus.includes("นัดหมาย") ? "🟡" : "⚪";
-                select.innerHTML += `<option value="${c.name}">${c.name} [${icon} ${c.latestStatus}]</option>`;
-            });
-            select.innerHTML += `<option value="NEW_CLIENT_OPTION" style="color:blue;">➕ เพิ่มลูกค้าใหม่...</option>`;
+        async function loadClients(showLoading = false) {
+            if(showLoading) setLoading(true, "กำลังโหลดรายชื่อ...");
+            
+            try {
+                const res = await fetch(`${API_URL}?action=getClients`);
+                const data = await res.json();
+                const select = document.getElementById("clientName");
+                select.innerHTML = '<option value="" selected disabled>-- เลือกลูกค้า --</option>';
+                data.clients.forEach(c => {
+                    let icon = c.latestStatus.includes("เข้าพบ") ? "🟢" : c.latestStatus.includes("นัดหมาย") ? "🟡" : "⚪";
+                    select.innerHTML += `<option value="${c.name}">${c.name} [${icon} ${c.latestStatus}]</option>`;
+                });
+                select.innerHTML += `<option value="NEW_CLIENT_OPTION" style="color:blue;">➕ เพิ่มลูกค้าใหม่...</option>`;
+                
+                if(showLoading) Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลแล้ว', timer: 1000, showConfirmButton: false });
+            } catch(e) {
+                console.error(e);
+            } finally {
+                if(showLoading) setLoading(false);
+            }
         }
 
         async function loadDashboard() {
